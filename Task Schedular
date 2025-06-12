@@ -1,0 +1,285 @@
+package com.mycompany.taskschedular1;
+
+import java.util.*;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
+
+class Task {
+    private String title;
+    private String description;
+    private LocalDate deadline;
+    private boolean completed;
+    private List<Task> dependencies;
+
+    private static final DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd/MM/yyyy");
+
+    public Task(String title, String description, String deadline) throws DateTimeParseException {
+        this.title = title;
+        this.description = description;
+        this.deadline = LocalDate.parse(deadline, formatter);
+        this.completed = false;
+        this.dependencies = new ArrayList<>();
+    }
+
+    public String getTitle() {
+        return title;
+    }
+
+    public LocalDate getDeadline() {
+        return deadline;
+    }
+
+    public boolean isCompleted() {
+        return completed;
+    }
+
+    public void addDependency(Task task) {
+        if (!dependencies.contains(task)) {
+            dependencies.add(task);
+        }
+    }
+
+    public void markCompleted() {
+        for (Task dependency : dependencies) {
+            if (!dependency.isCompleted()) {
+                System.out.println("Error: Task \"" + dependency.getTitle() + "\" must be completed first.");
+                return;
+            }
+        }
+        this.completed = true;
+        System.out.println("Task marked as completed.");
+    }
+
+    public void removeDependency(Task task) {
+        dependencies.remove(task);
+    }
+
+    public void editTask(String newTitle, String newDescription, String newDeadline) {
+        if (!newTitle.trim().isEmpty()) {
+            this.title = newTitle;
+        }
+        if (!newDescription.trim().isEmpty()) {
+            this.description = newDescription;
+        }
+        if (!newDeadline.trim().isEmpty()) {
+            try {
+                this.deadline = LocalDate.parse(newDeadline, formatter);
+            } catch (DateTimeParseException e) {
+                System.out.println("Invalid date format. Keeping previous deadline.");
+            }
+        }
+    }
+
+    public String toString(int id) {
+        String dependencyNames = dependencies.isEmpty() ? "None" : 
+            String.join(", ", dependencies.stream().map(Task::getTitle).toList());
+
+        return String.format("[ID: %d] %s\n(Deadline: %s, Completed: %s, Dependencies: %s)\nDescription: %s",
+                id, title, deadline.format(formatter), completed ? "Yes" : "No", dependencyNames, description);
+    }
+}
+
+class TaskManager {
+    private List<Task> taskList = new ArrayList<>();
+    private Scanner scanner = new Scanner(System.in);
+
+    public void addTask(String title, String description, String deadline) {
+        try {
+            Task newTask = new Task(title, description, deadline);
+            taskList.add(newTask);
+            sortTasks();
+            System.out.println("Task added successfully.");
+            viewTasks();
+        } catch (DateTimeParseException e) {
+            System.out.println("Invalid date format. Use DD/MM/YYYY.");
+        }
+    }
+
+    public void addDependency(int taskID, int dependentID) {
+        Task task = getTaskById(taskID);
+        Task dependentTask = getTaskById(dependentID);
+
+        if (task == null || dependentTask == null) {
+            System.out.println("Invalid Task ID(s). Please try again.");
+            return;
+        }
+
+        if (task == dependentTask) {
+            System.out.println("Oops! A task can’t depend on itself.");
+            return;
+        }
+
+        if (task.isCompleted()) {
+            System.out.println("Sorry, you can't add a dependency to a completed task.");
+            return;
+        }
+
+        dependentTask.addDependency(task);
+        System.out.println(" Great! '" + dependentTask.getTitle() + "' (Task " + dependentID + ") will now start only after '" + task.getTitle() + "' (Task " + taskID + ") is completed.");
+        viewTasks();
+    }
+
+    public void viewTasks() {
+        if (taskList.isEmpty()) {
+            System.out.println("No tasks available.");
+            return;
+        }
+        sortTasks();
+        System.out.println("\nTask List:");
+        for (int i = 0; i < taskList.size(); i++) {
+            System.out.println(taskList.get(i).toString(i + 1));
+        }
+    }
+
+    public void showNextTask() {
+        if (taskList.isEmpty()) {
+            System.out.println("No upcoming tasks.");
+            return;
+        }
+        sortTasks();
+        System.out.println("\nNext Task:\n" + taskList.get(0).toString(1));
+    }
+
+    public void markTaskCompleted(int id) {
+        Task task = getTaskById(id);
+        if (task != null) {
+            task.markCompleted();
+            viewTasks();
+        }
+    }
+
+    public void editTask(int taskId) {
+        Task task = getTaskById(taskId);
+        if (task == null) {
+            System.out.println("Task not found.");
+            return;
+        }
+
+        System.out.print("New Title (leave blank to keep current): ");
+        String newTitle = scanner.nextLine().trim();
+
+        System.out.print("New Description (leave blank to keep current): ");
+        String newDescription = scanner.nextLine().trim();
+
+        System.out.print("New Deadline (DD/MM/YYYY, leave blank to keep current): ");
+        String newDeadline = scanner.nextLine().trim();
+
+        task.editTask(newTitle, newDescription, newDeadline);
+        System.out.println("Task edited successfully!");
+    }
+
+    public void deleteTask(int id) {
+        if (taskList.isEmpty() || id <= 0 || id > taskList.size()) {
+            System.out.println("Invalid Task ID.");
+            return;
+        }
+
+        Task taskToRemove = taskList.get(id - 1);
+        taskList.remove(taskToRemove);
+
+        for (Task task : taskList) {
+            task.removeDependency(taskToRemove);
+        }
+
+        System.out.println("Task deleted successfully.");
+        viewTasks();
+    }
+
+    private void sortTasks() {
+        taskList.sort(Comparator.comparing(Task::getDeadline));
+    }
+
+    private Task getTaskById(int id) {
+        if (id <= 0 || id > taskList.size()) {
+            return null;
+        }
+        return taskList.get(id - 1);
+    }
+
+    public int getValidIntegerInput() {
+        while (true) {
+            try {
+                String input = scanner.nextLine().trim();
+                return Integer.parseInt(input);
+            } catch (NumberFormatException e) {
+                System.out.print("Invalid input. Please enter a valid number: ");
+            }
+        }
+    }
+
+    public void start() {
+        while (true) {
+            System.out.println("\nTask Scheduler Menu");
+            System.out.println("1 - Add Task");
+            System.out.println("2 - View Tasks");
+            System.out.println("3 - Show Next Task");
+            System.out.println("4 - Mark Task as Completed");
+            System.out.println("5 - Edit Task");
+            System.out.println("6 - Delete Task");
+            System.out.println("7 - Add Task Dependency");
+            System.out.println("8 - Exit");
+            System.out.print("Enter choice: ");
+
+            int choice = getValidIntegerInput();
+
+            switch (choice) {
+                case 1:
+                    System.out.print("Title: ");
+                    String title = scanner.nextLine();
+                    System.out.print("Description: ");
+                    String desc = scanner.nextLine();
+                    System.out.print("Deadline (DD/MM/YYYY): ");
+                    String deadline = scanner.nextLine();
+                    addTask(title, desc, deadline);
+                    break;
+                case 2:
+                    viewTasks();
+                    break;
+                case 3:
+                    showNextTask();
+                    break;
+                case 4:
+                    System.out.print("Enter Task ID: ");
+                    int id = getValidIntegerInput();
+                    markTaskCompleted(id);
+                    break;
+                case 5:
+                    System.out.print("Enter Task ID: ");
+                    int editId = getValidIntegerInput();
+                    editTask(editId);
+                    break;
+                case 6:
+                    System.out.print("Enter Task ID: ");
+                    int deleteId = getValidIntegerInput();
+                    deleteTask(deleteId);
+                    break;
+                case 7:
+                    System.out.println("Which task do you want to update?");
+                    System.out.print(" Enter the Task ID: ");
+                    int depId = getValidIntegerInput();
+                    System.out.println("What should this task depend on?");
+                    System.out.print(" Enter the Task ID it must wait for: ");
+                    int dependencyId = getValidIntegerInput();
+                    addDependency(dependencyId, depId);
+                    break;
+                case 8:
+                    System.out.println("Exiting Task Scheduler.");
+                    return;
+                default:
+                    System.out.println("Invalid choice. Please select a valid option.");
+            }
+        }
+    }
+}
+
+public class TaskSchedular1 {
+    public static void main(String[] args) {
+        TaskManager manager = new TaskManager();
+        manager.start();
+    }
+}
+
+
+
+
